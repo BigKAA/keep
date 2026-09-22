@@ -116,6 +116,11 @@ class DephealthProviderAuthConfig:
 class DephealthProvider(BaseTopologyProvider):
     """Pull service dependency topology from app_dependency_* metrics."""
 
+    provider_description = (
+        "Pulls a service dependency topology from app_dependency_* metrics "
+        "exported by dephealth (topologymetrics) SDKs to any Prometheus or "
+        "VictoriaMetrics-compatible server."
+    )
     PROVIDER_CATEGORY = ["Monitoring"]
     PROVIDER_TAGS = ["topology"]
     PROVIDER_SCOPES = [
