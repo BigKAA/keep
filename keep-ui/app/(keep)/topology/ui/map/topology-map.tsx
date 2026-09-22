@@ -706,6 +706,10 @@ export function TopologyMap({
                         <span className="inline-block w-3 h-3 border-2 border-gray-200 rounded" />
                         no firing alerts
                       </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-3 h-3 rounded-full bg-amber-500" />
+                        cascade: affected by down critical dependency
+                      </span>
                     </>
                   )}
                 </div>

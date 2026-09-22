@@ -14,6 +14,7 @@ import {
 import { IncidentDto } from "@/entities/incidents/model";
 import { KeyedMutator } from "swr";
 import { AlertDto, Severity, Status } from "@/entities/alerts/model";
+import { computeCascadeWarnings } from "@/app/(keep)/topology/ui/map/cascade";
 
 const SEVERITY_WEIGHT: Record<Severity, number> = {
   [Severity.Critical]: 5,
@@ -57,6 +58,17 @@ export function getNodesAndEdgesFromTopologyData(
   const nodeMap = new Map<string, TopologyNode>();
   const edgeMap = new Map<string, Edge>();
 
+  const alertsByService = new Map<string, AlertDto[]>();
+  for (const alert of allAlerts) {
+    if (!alert.service) {
+      continue;
+    }
+    const alerts = alertsByService.get(alert.service) ?? [];
+    alerts.push(alert);
+    alertsByService.set(alert.service, alerts);
+  }
+  const cascadeWarnings = computeCascadeWarnings(topologyData, alertsByService);
+
   // Create nodes from service definitions
   for (const service of topologyData) {
     const numIncidentsToService = allIncidents.filter(
@@ -64,9 +76,7 @@ export function getNodesAndEdgesFromTopologyData(
         incident.services.includes(service.display_name) ||
         incident.services.includes(service.service)
     );
-    const serviceAlerts = allAlerts.filter(
-      (alert) => alert.service === service.service
-    );
+    const serviceAlerts = alertsByService.get(service.service) ?? [];
     const node: ServiceNodeType = {
       id: service.id.toString(),
       type: "service",
@@ -78,6 +88,7 @@ export function getNodesAndEdgesFromTopologyData(
         alerts: serviceAlerts.filter((alert) => alert.status === Status.Firing)
           .length,
         highestAlertSeverity: getHighestFiringSeverity(serviceAlerts),
+        cascadeCount: cascadeWarnings.get(service.service) ?? 0,
         topologyMutator,
       },
       position: { x: 0, y: 0 }, // Dagre will handle the actual positioning

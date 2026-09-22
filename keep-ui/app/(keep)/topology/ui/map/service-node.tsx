@@ -125,6 +125,9 @@ export function ServiceNode({ data, selected }: NodeProps<ServiceNodeType>) {
         ? "border-orange-500"
         : "border-gray-200";
   const borderColor = selected ? "border-tremor-brand" : severityBorderColor;
+  // Cascade warning: the service itself is healthy, but a service it
+  // (transitively) depends on through critical edges is down.
+  const cascadeCount = data.cascadeCount ?? 0;
 
   return (
     <>
@@ -136,6 +139,16 @@ export function ServiceNode({ data, selected }: NodeProps<ServiceNodeType>) {
         onMouseEnter={() => setShowDetails(true)}
         onMouseLeave={() => setShowDetails(false)}
       >
+        {cascadeCount > 0 && (
+          <span
+            className="absolute top-[-17px] left-[-20px] mt-2 ml-2 px-2 py-1 text-white text-[7px] leading-[7px] font-bold rounded-full bg-amber-500"
+            title={`Affected by ${cascadeCount} service${
+              cascadeCount === 1 ? "" : "s"
+            } currently down through critical dependencies`}
+          >
+            ⚠ {cascadeCount}
+          </span>
+        )}
         {data.category && (
           <div className="absolute top-2 right-2 text-gray-400">
             <DynamicImageProviderIcon

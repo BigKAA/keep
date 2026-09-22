@@ -34,6 +34,9 @@ export interface TopologyService {
   // Highest severity among the service's firing alerts (client-side),
   // undefined when the service has no firing alerts
   highestAlertSeverity?: Severity;
+  // Number of distinct down services whose critical dependencies affect
+  // this service (cascade warning, client-side), 0 when unaffected
+  cascadeCount?: number;
   is_manual: boolean;
 }
 
