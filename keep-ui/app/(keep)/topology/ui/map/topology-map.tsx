@@ -12,6 +12,7 @@ import {
   BackgroundVariant,
   Controls,
   Edge,
+  Panel,
   ReactFlow,
   ReactFlowInstance,
   ReactFlowProvider,
@@ -498,7 +499,7 @@ export function TopologyMap({
       setNodes(layoutedElements.nodes);
       setEdges(layoutedElements.edges);
     },
-    [topologyData, applicationMap, allIncidents, mutateTopologyData]
+    [topologyData, applicationMap, allIncidents, allAlerts, mutateTopologyData]
   );
 
   useEffect(
@@ -673,6 +674,23 @@ export function TopologyMap({
               }}
             >
               <Background variant={BackgroundVariant.Lines} />
+              <Panel position="bottom-left">
+                <div className="flex flex-col gap-1 bg-tremor-background border border-tremor-border rounded-lg shadow p-2 text-xs">
+                  <span className="font-semibold">Node state</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 border-2 border-red-500 rounded" />
+                    firing critical / high / error alert
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 border-2 border-orange-500 rounded" />
+                    firing warning alert
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 border-2 border-gray-200 rounded" />
+                    no firing alerts
+                  </span>
+                </div>
+              </Panel>
               <Controls />
             </ReactFlow>
           </ReactFlowProvider>
