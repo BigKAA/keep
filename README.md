@@ -920,3 +920,9 @@ Thank you for contributing and continuously making <b>Keep</b> better, <b>you're
 <a href="https://github.com/keephq/keep/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=keephq/keep" />
 </a>
+
+## Fork additions
+
+This fork (BigKAA/keep) carries additions on top of upstream keephq/keep:
+
+- **dephealth topology provider** (`feature/dephealth-provider` branch, `keep/providers/dephealth_provider/`) — pulls a service dependency topology from `app_dependency_*` metrics exported by [topologymetrics](https://github.com/BigKAA/topologymetrics) (dephealth) SDKs via any Prometheus/VictoriaMetrics-compatible server. Configurable PromQL query and label mapping, deterministic application UUIDs. Upstream proposal: keephq/keep#6835.
