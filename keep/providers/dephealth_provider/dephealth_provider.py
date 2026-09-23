@@ -21,6 +21,11 @@ DEFAULT_TOPOLOGY_QUERY = (
     "(app_dependency_health)"
 )
 
+DEFAULT_LATENCY_QUERY = (
+    "sum by (name, dependency) (rate(app_dependency_latency_seconds_sum[5m])) "
+    "/ sum by (name, dependency) (rate(app_dependency_latency_seconds_count[5m]))"
+)
+
 
 @pydantic.dataclasses.dataclass
 class DephealthProviderAuthConfig:
@@ -61,6 +66,18 @@ class DephealthProviderAuthConfig:
             "sensitive": False,
         },
         default=DEFAULT_TOPOLOGY_QUERY,
+    )
+    latency_query: str = dataclasses.field(
+        metadata={
+            "description": (
+                "PromQL query that returns the average check latency in seconds "
+                "per (service, dependency); appended to the edge protocol. "
+                "Set to an empty string to disable."
+            ),
+            "hint": DEFAULT_LATENCY_QUERY,
+            "sensitive": False,
+        },
+        default=DEFAULT_LATENCY_QUERY,
     )
     service_label: str = dataclasses.field(
         metadata={
@@ -259,8 +276,67 @@ class DephealthProvider(BaseTopologyProvider):
             if not service.application_relations:
                 service.application_relations = None
 
+        self._enrich_edges_with_latency(services)
+
         self.logger.info(
             "Pulled topology from dephealth metrics",
             extra={"services": len(services), "applications": len(applications)},
         )
         return list(services.values()), {}
+
+    def _enrich_edges_with_latency(
+        self, services: dict[str, TopologyServiceInDto]
+    ) -> None:
+        """
+        Appends the average check latency to every edge protocol it has data
+        for, e.g. "http" becomes "http · 12.3ms". Latency is best effort: a
+        failing or empty latency query leaves the protocols unchanged.
+        """
+        if not self.authentication_config.latency_query:
+            return
+        try:
+            latencies = self._get_edge_latencies(
+                self.authentication_config.latency_query
+            )
+        except Exception:
+            self.logger.warning(
+                "dephealth latency query failed, edge protocols stay "
+                "without latency",
+                exc_info=True,
+            )
+            return
+        for service_name, service in services.items():
+            for dependency_name, protocol in service.dependencies.items():
+                latency = latencies.get((service_name, dependency_name))
+                if latency is not None:
+                    service.dependencies[dependency_name] = (
+                        f"{protocol} · {self._format_latency(latency)}"
+                    )
+
+    def _get_edge_latencies(self, query: str) -> dict[tuple[str, str], float]:
+        """
+        Runs the latency query and maps (service, dependency) -> seconds.
+        """
+        response = self._query(query)
+        if response.get("status") != "success":
+            raise Exception(f"dephealth latency query failed: {response}")
+        config = self.authentication_config
+        latencies: dict[tuple[str, str], float] = {}
+        for series in response.get("data", {}).get("result", []):
+            metric = series.get("metric", {})
+            service_name = metric.get(config.service_label)
+            dependency_name = metric.get(config.dependency_label)
+            if not service_name or not dependency_name:
+                continue
+            try:
+                latencies[(service_name, dependency_name)] = float(series["value"][1])
+            except (KeyError, IndexError, TypeError, ValueError):
+                continue
+        return latencies
+
+    @staticmethod
+    def _format_latency(seconds: float) -> str:
+        milliseconds = seconds * 1000
+        if milliseconds < 1000:
+            return f"{milliseconds:.1f}ms"
+        return f"{seconds:.2f}s"

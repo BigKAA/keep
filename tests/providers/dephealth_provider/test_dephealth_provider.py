@@ -1,10 +1,10 @@
 """
 Unit tests for the dephealth topology provider.
 
-vm_topology_response.json is a real instant-query response from a
-VictoriaMetrics instance scraping the uniproxy test topology: 20 edges,
-2 applications (proxy-cluster-1, proxy-cluster-2) with shared dependency
-nodes (postgresql, uniproxy-04).
+vm_topology_response.json / vm_latency_response.json are real instant-query
+responses from a VictoriaMetrics instance scraping the uniproxy test
+topology: 20 edges, 2 applications (proxy-cluster-1, proxy-cluster-2) with
+shared dependency nodes (postgresql, uniproxy-04).
 """
 
 import json
@@ -16,6 +16,7 @@ import pytest
 
 from keep.contextmanager.contextmanager import ContextManager
 from keep.providers.dephealth_provider.dephealth_provider import (
+    DEFAULT_LATENCY_QUERY,
     DEFAULT_TOPOLOGY_QUERY,
     DephealthProvider,
 )
@@ -34,12 +35,43 @@ def _build_provider(**authentication) -> DephealthProvider:
     return DephealthProvider(ContextManager(tenant_id="test"), PROVIDER_ID, config)
 
 
-def _vm_response(fixture: str = "vm_topology_response.json") -> MagicMock:
-    response = MagicMock()
-    response.status_code = 200
+def _fixture(fixture: str) -> dict:
     with open(FIXTURES_DIR / fixture) as f:
-        response.json.return_value = json.load(f)
-    return response
+        return json.load(f)
+
+
+def _mock_vm(
+    mock_get,
+    topology: str = "vm_topology_response.json",
+    latency: str = "vm_latency_response.json",
+    latency_status: int = 200,
+):
+    """Route requests.get to the fixture matching the query text."""
+
+    def _respond(url, params=None, **kwargs):
+        response = MagicMock()
+        query = (params or {}).get("query", "")
+        if "latency" in query:
+            response.status_code = latency_status
+            response.content = b"boom" if latency_status != 200 else b""
+            if latency_status == 200:
+                response.json.return_value = _fixture(latency)
+        else:
+            response.status_code = 200
+            response.json.return_value = _fixture(topology)
+        return response
+
+    mock_get.side_effect = _respond
+
+
+def _latency_seconds(service: str, dependency: str) -> float:
+    for series in _fixture("vm_latency_response.json")["data"]["result"]:
+        if (
+            series["metric"].get("name") == service
+            and series["metric"].get("dependency") == dependency
+        ):
+            return float(series["value"][1])
+    raise AssertionError(f"no latency series for {service} -> {dependency}")
 
 
 class TestValidateConfig:
@@ -49,6 +81,7 @@ class TestValidateConfig:
             VICTORIAMETRICS_URL
         )
         assert provider.authentication_config.query == DEFAULT_TOPOLOGY_QUERY
+        assert provider.authentication_config.latency_query == (DEFAULT_LATENCY_QUERY)
         assert provider.authentication_config.verify is True
         assert provider.authentication_config.service_label == "name"
         assert provider.authentication_config.namespace_label == "namespace"
@@ -64,6 +97,7 @@ class TestValidateConfig:
             service_label="svc",
             dependency_label="dep",
             protocol_label="kind",
+            latency_query="",
             verify=False,
         )
         assert provider.authentication_config.query == (
@@ -72,13 +106,14 @@ class TestValidateConfig:
         assert provider.authentication_config.service_label == "svc"
         assert provider.authentication_config.dependency_label == "dep"
         assert provider.authentication_config.protocol_label == "kind"
+        assert provider.authentication_config.latency_query == ""
         assert provider.authentication_config.verify is False
 
 
 class TestPullTopology:
     @patch("keep.providers.dephealth_provider.dephealth_provider.requests.get")
     def test_builds_topology_from_real_metrics(self, mock_get):
-        mock_get.return_value = _vm_response()
+        _mock_vm(mock_get)
         services, extra = _build_provider().pull_topology()
         assert extra == {}
         by_name = {service.service: service for service in services}
@@ -100,12 +135,15 @@ class TestPullTopology:
         assert "critical" in postgres.tags  # critical=yes edge from uniproxy-03
         assert postgres.dependencies == {}
 
-        # edges keep the metric type as protocol
-        assert by_name["uniproxy-03"].dependencies["postgresql"] == "postgres"
+        # edge protocols carry type and average check latency
+        expected_ms = _latency_seconds("uniproxy-03", "postgresql") * 1000
+        assert by_name["uniproxy-03"].dependencies["postgresql"] == (
+            f"postgres · {expected_ms:.1f}ms"
+        )
 
     @patch("keep.providers.dephealth_provider.dephealth_provider.requests.get")
     def test_applications_are_stable_and_shared(self, mock_get):
-        mock_get.return_value = _vm_response()
+        _mock_vm(mock_get)
         services, _ = _build_provider().pull_topology()
         by_name = {service.service: service for service in services}
 
@@ -123,7 +161,7 @@ class TestPullTopology:
 
     @patch("keep.providers.dephealth_provider.dephealth_provider.requests.get")
     def test_custom_label_mapping(self, mock_get):
-        mock_get.return_value = _vm_response("vm_renamed_labels_response.json")
+        _mock_vm(mock_get, topology="vm_renamed_labels_response.json")
         provider = _build_provider(
             query="group by (svc, dep, kind) (custom_metric)",
             service_label="svc",
@@ -133,8 +171,27 @@ class TestPullTopology:
         services, _ = provider.pull_topology()
         by_name = {service.service: service for service in services}
         assert len(services) == 4
+        # latency fixture uses the default labels, so nothing matches and
+        # protocols stay bare
         assert by_name["billing-api"].dependencies["postgres-main"] == "postgres"
         assert by_name["order-api"].dependencies["payment-api"] == "http"
+
+    @patch("keep.providers.dephealth_provider.dephealth_provider.requests.get")
+    def test_latency_disabled_keeps_bare_protocols(self, mock_get):
+        _mock_vm(mock_get)
+        services, _ = _build_provider(latency_query="").pull_topology()
+        by_name = {service.service: service for service in services}
+        assert by_name["uniproxy-03"].dependencies["postgresql"] == "postgres"
+        assert mock_get.call_count == 1
+
+    @patch("keep.providers.dephealth_provider.dephealth_provider.requests.get")
+    def test_latency_failure_is_best_effort(self, mock_get):
+        _mock_vm(mock_get, latency_status=500)
+        services, _ = _build_provider().pull_topology()
+        by_name = {service.service: service for service in services}
+        # topology is still pulled, protocols stay without latency
+        assert len(services) == 17
+        assert by_name["uniproxy-03"].dependencies["postgresql"] == "postgres"
 
     @patch("keep.providers.dephealth_provider.dephealth_provider.requests.get")
     def test_query_error_raises(self, mock_get):
@@ -145,6 +202,12 @@ class TestPullTopology:
         provider = _build_provider()
         with pytest.raises(Exception, match="dephealth query failed"):
             provider.pull_topology()
+
+    def test_format_latency(self):
+        assert DephealthProvider._format_latency(0.011368) == "11.4ms"
+        assert DephealthProvider._format_latency(0.5) == "500.0ms"
+        assert DephealthProvider._format_latency(999.999e-3) == "1000.0ms"
+        assert DephealthProvider._format_latency(1.5) == "1.50s"
 
 
 class TestValidateScopes:
