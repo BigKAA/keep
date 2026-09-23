@@ -71,7 +71,11 @@ import {
   showSuccessToast,
 } from "@/shared/ui";
 import { downloadFileFromString } from "@/shared/lib/downloadFileFromString";
-import { PlusIcon } from "@heroicons/react/20/solid";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  PlusIcon,
+} from "@heroicons/react/20/solid";
 import { TbTopologyRing } from "react-icons/tb";
 import { useAlerts } from "@/entities/alerts/model";
 
@@ -108,6 +112,7 @@ export function TopologyMap({
   standalone = false,
 }: TopologyMapProps) {
   const [initiallyFitted, setInitiallyFitted] = useState(false);
+  const [isLegendOpen, setIsLegendOpen] = useState(true);
 
   const {
     topologyData,
@@ -676,19 +681,33 @@ export function TopologyMap({
               <Background variant={BackgroundVariant.Lines} />
               <Panel position="top-left">
                 <div className="flex flex-col gap-1 bg-tremor-background border border-tremor-border rounded-lg shadow p-2 text-xs">
-                  <span className="font-semibold">Node state</span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-3 h-3 border-2 border-red-500 rounded" />
-                    firing critical / high / error alert
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-3 h-3 border-2 border-orange-500 rounded" />
-                    firing warning alert
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-3 h-3 border-2 border-gray-200 rounded" />
-                    no firing alerts
-                  </span>
+                  <button
+                    className="flex items-center gap-1 font-semibold"
+                    onClick={() => setIsLegendOpen((open) => !open)}
+                  >
+                    Node state
+                    {isLegendOpen ? (
+                      <ChevronUpIcon className="w-3 h-3" />
+                    ) : (
+                      <ChevronDownIcon className="w-3 h-3" />
+                    )}
+                  </button>
+                  {isLegendOpen && (
+                    <>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-3 h-3 border-2 border-red-500 rounded" />
+                        firing critical / high / error alert
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-3 h-3 border-2 border-orange-500 rounded" />
+                        firing warning alert
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-3 h-3 border-2 border-gray-200 rounded" />
+                        no firing alerts
+                      </span>
+                    </>
+                  )}
                 </div>
               </Panel>
               <Controls />
