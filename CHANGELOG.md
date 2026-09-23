@@ -3,6 +3,23 @@
 All notable changes to this fork (BigKAA/keep) are documented in this file.
 Upstream changes are documented at https://github.com/keephq/keep/releases.
 
+## [0.54.3-bk-0.2] - 2026-09-23
+
+Topology UI refinements from lab feedback; backend unchanged from 0.54.3-bk-0.1.
+
+### Changed
+- Topology UI: the node alert badge counts firing alerts only — resolved
+  alerts no longer badge a node (consistent with border colors and cascade
+  warnings; keephq/keep#6838, comment on keephq/keep#6836)
+- Topology UI: legend moved to the top-left corner (bottom-left overlapped
+  the React Flow controls) and made collapsible (keephq/keep#6838)
+
+### Fixed
+- N/A
+
+### Security
+- N/A
+
 ## [0.54.3-bk-0.1] - 2026-09-23
 
 Based on upstream keep v0.54.3 (+4 commits on main at fork time, fe5c8964).
