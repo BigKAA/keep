@@ -674,7 +674,7 @@ export function TopologyMap({
               }}
             >
               <Background variant={BackgroundVariant.Lines} />
-              <Panel position="bottom-left">
+              <Panel position="top-left">
                 <div className="flex flex-col gap-1 bg-tremor-background border border-tremor-border rounded-lg shadow p-2 text-xs">
                   <span className="font-semibold">Node state</span>
                   <span className="flex items-center gap-1.5">

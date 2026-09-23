@@ -73,7 +73,10 @@ export function getNodesAndEdgesFromTopologyData(
       data: {
         ...service,
         incidents: numIncidentsToService.length,
-        alerts: serviceAlerts.length,
+        // the badge counts firing alerts only, consistent with the border
+        // color and cascade warnings; resolved alerts don't badge a node
+        alerts: serviceAlerts.filter((alert) => alert.status === Status.Firing)
+          .length,
         highestAlertSeverity: getHighestFiringSeverity(serviceAlerts),
         topologyMutator,
       },
