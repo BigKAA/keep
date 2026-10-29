@@ -3,6 +3,37 @@
 All notable changes to this fork (BigKAA/keep) are documented in this file.
 Upstream changes are documented at https://github.com/keephq/keep/releases.
 
+## [0.54.3-bk-0.3] - 2026-10-29
+
+Based on upstream main at e5cd8698 (v0.54.3 + 2 upstream fixes). Adds the
+generic OIDC authentication module; no other changes from 0.54.3-bk-0.2
+(which lives on its own branch with the topology UI refinements).
+
+### Added
+- Generic OIDC authentication (`AUTH_TYPE=OIDC`): single sign-on against any
+  standards-compliant OpenID Connect provider — Dex, Authentik, Zitadel,
+  Authelia, Kanidm, Keycloak without an EE license, and similar
+  - backend: RS256 bearer verification via provider JWKS with cached
+    discovery (`keep issue #6781` lesson), configurable token type (id_token
+    by default, aud=client_id per the OIDC spec), configurable groups claim
+    mapped to admin/noc/webhook roles from comma-separated lists, no default
+    role (403 without a mapped group), just-in-time user provisioning with
+    per-request role and last-sign-in updates
+  - keep-ui: NextAuth custom OIDC provider (authorization code + PKCE),
+    session role derived from the same role lists, refresh via the
+    discovered token endpoint, auto-redirect on the sign-in page
+  - documentation: `docs/deployment/authentication/oidc-auth.mdx` with
+    step-by-step Keycloak, Dex (incl. ldap connector) and Authentik examples
+  - unit tests: `keep/tests/test_oidc_auth.py` (12 cases incl. the discovery
+    cache regression)
+
+### Fixed
+- N/A
+
+### Security
+- No default role on unmatched groups (unlike the okta type); issuer,
+  audience and expiry are verified on every API request
+
 ## [0.54.3-bk-0.2] - 2026-09-23
 
 Topology UI refinements from lab feedback; backend unchanged from 0.54.3-bk-0.1.
